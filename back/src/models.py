@@ -24,11 +24,30 @@ class Product(db.Model):
     reviews = db.relationship('Review', backref='product', lazy=True)
     categories = db.relationship('Category', secondary=product_category, backref='products')  
 
+    def serialize(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "price": float(self.price) if self.price else None,  
+            "stock": self.stock,
+            "image_url": self.img,  
+            "categories": [category.serialize() for category in self.categories], #Relación
+            "created_at": self.created_at.isoformat() if self.created_at else None
+        }
+
 class Category(db.Model):
     __tablename__ = 'categories'  
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), unique=True, nullable=False)
     description = db.Column(db.Text)
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description
+        }
 
 class Client(db.Model):
     __tablename__ = 'clients'
@@ -51,6 +70,15 @@ class Client(db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+    def serialize(self):
+        return{
+            "id":self.id,
+            "name":self.name,
+            "email":self.email,
+            "subscribe":self.subscribe,
+            "phone":self.phone,
+            "created_at": self.created_at.isoformat() if self.created_at else None
+        }
 
 class Address(db.Model):  
     __tablename__ = 'addresses' 
@@ -73,6 +101,7 @@ class Order(db.Model):
     discount_applied = db.Column(db.Float, default=0)  
     # Relaciones
     details = db.relationship('OrderDetail', backref='order', lazy=True)  
+
 
 class OrderDetail(db.Model):  
     __tablename__ = 'order_details'
