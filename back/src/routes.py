@@ -1,5 +1,5 @@
 import os
-import cloudinary
+import cloudinary.uploader
 from flask_cors import cross_origin, CORS
 from flask import Blueprint, request, jsonify
 from werkzeug.utils import secure_filename
@@ -7,6 +7,7 @@ from werkzeug.security import generate_password_hash
 from flask_jwt_extended import jwt_required, create_access_token, get_jwt_identity
 from models import db, product_category, Product, Category, Client, Address, Order, OrderDetail, Review, Coupon
 from decorators import admin_required
+from config import allowed_files, obtener_public_id
 
 api = Blueprint("api", __name__)
 
@@ -74,12 +75,116 @@ def login():
 #### PRODUCTOS
 @api.route('/products', methods=['POST'])
 @admin_required
+def new_product():
+
+    if 'name' not in request.form or not request.form['name']:
+        return jsonify({"error":"El nombre es obligatorio"}), 400
+    if  'description' not in request.form or not request.form['description'] :
+        return jsonify({"error":"La descripción es obligatoria"}), 400
+    if 'price' not in request.form or not request.form['price']:
+        return jsonify({"error":"El precio es obligatorio"}), 400
+    
+    image_url=None
+    if 'photo' in request.files:
+        image=request.files['photo']
+     
+    if image.filename == "":
+        return jsonify({"error":"Nombre del archivo vacío"}), 400
+    if not allowed_files(image.filename):
+        return jsonify({"error":"Formato de archivo no permitido"}), 400
+    
+    try: #para subir la imagen a cloudinary
+        upload_result = cloudinary.uploader.upload(image, folder="products")
+        image_url=upload_result['secure_url']
+
+    except Exception as e:
+            return jsonify({"error": f"Error al subir imagen: {str(e)}"}), 500
+    try:
+        new_product = Product(
+            name=request.form['name'],
+            description=request.form['description'],
+            price=float(request.form['price']),
+            img=image_url
+        )
+        db.session.add(new_product)
+        db.session.commit()
+        return jsonify({
+            "msg":"Producto creado",
+            "product":new_product.serialize()
+            }), 201
+    except ValueError:
+        db.session.rollback()
+        return jsonify({"error":"Precio o stock inválido"}), 400
+    except Exception as e:  # Otros errores de BD
+        db.session.rollback()
+        return jsonify({"error": f"Error en la base de datos: {str(e)}"}), 500
+
+    
+
+
+
 
 @api.route('/products/<int:id>', methods= ['PUT'])
 @admin_required
+def edit_product(id):
+    product = Product.query.get(id)
+
+    if not product:
+        return jsonify({"error":"Producto no encontrado"}), 404
+    
+    data =request.get_json()
+    if not data:
+        return jsonify({"error":"Datos no proporcionados"}), 400
+    try:
+        if 'name' in data and data['name'] != product.name:
+            existing = Product.query.filter(Product.id != id,
+                                             Product.name == data['name']).first()
+            if existing:
+                return({"error":"Ya existe un producto con este nombre"}),409
+            product.name =data['name']
+
+            if 'description' in data:
+                product.description = data['description']
+
+            if 'price' in data:
+                try:
+                    product.price = float(data['price'])
+                except ValueError:
+                    return jsonify({"error":"El precio debe ser un número válido"}), 400
+
+            if 'image_file' in request.files:
+                file = request.files['image_file']
+                upload_result = cloudinary.uploader.upload(file)
+                product.img = upload_result['secure_url']
+
+        db.session.commit()
+        return jsonify({
+            "message":"Se realizon los cambios",
+            "product": product.serialize()
+        }), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error":"No se pudieron realizar los cambios:"+str(e)}), 500
 
 @api.route('/products/<int:id>', methods= ['DELETE'])
 @admin_required
+def delete_product(id):
+    product = Product.query.get(id)
+
+    if not product:
+        return jsonify({"error":"No se encontro el producto"}), 404
+    
+    try:
+        if product.img:
+            public_id = obtener_public_id(product.img)
+            cloudinary.uploader.destroy(public_id)
+
+        db.session.delete(product)
+        db.session.commit()
+        return jsonify({"msg":"Producto eliminado correctamente"}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error":"No se pudo eliminar producto:" + str(e)}),500
 
 @api.route('/products', methods=['GET'])
 def get_products():
@@ -139,9 +244,12 @@ def edit_category(id):
         return jsonify({"error":"Datos no proporcionados"}), 400
     try:
         if 'name' in data:
-            if Category.query.filter(Category.id != Category.name == data['name']).first():
+            existing = Category.query.filter(Category.id != id,
+                                     Category.name == data['name']
+                                     ).first()
+            if existing:
                 return jsonify({"error":"Ya existe una categoria con este nombre"}), 409
-            category.name=data['name']
+            category.name = data['name']
 
             if 'description' in data:
                 category.description = data['description']
