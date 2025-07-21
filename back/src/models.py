@@ -16,25 +16,48 @@ class Product(db.Model):
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)  
     price = db.Column(db.Float, nullable=False)
+    discount = db.Column(db.Float, default=0.0)
+    discount_expiration =db.Column(db.DateTime)
     stock = db.Column(db.Integer, default=0)
     img = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     # Relaciones
     order_details = db.relationship('OrderDetail', backref='product', lazy=True)  
     reviews = db.relationship('Review', backref='product', lazy=True)
-    categories = db.relationship('Category', secondary=product_category, backref='products')  
+    categories = db.relationship('Category', secondary=product_category, backref='products')
 
+    @property
+    def current_price(self): #Calcular el precio final considerando descuentos vigentes
+        if self.active_discount:
+            return round(self.price * (1 - self.discount/100), 2)
+        return self.price
+    @property
+    def active_discount(self): # Verificar si el descuento esta activo
+        return (self.discount>0 and (not self.discount_expiration or self.discount_expiration > datetime.now(timezone.utc)))
+    
     def serialize(self):
+        def peso_cl(value):
+            if value is None:
+                return None
+            value_rounded = int(round(value, 0)) #Redondea decimales ya que en peso chileno no se usa decimales
+            return "{:,}".format(value_rounded).replace (",", ".") #Para que tenga separador cada 1.000
+        
         return {
             "id": self.id,
             "name": self.name,
             "description": self.description,
-            "price": float(self.price) if self.price else None,  
+            "original_price": peso_cl(self.price),
+            "current_price": peso_cl(self.current_price),
+            "discount_percent":round(self.discount, 2) if self.active_discount else None,
+            "discount_ends": self.discount_expiration.isoformat() if self.discount_expiration else None,
+            "on_sale": self.active_discount,  
             "stock": self.stock,
             "image_url": self.img,  
             "categories": [category.serialize() for category in self.categories], #Relación
             "created_at": self.created_at.isoformat() if self.created_at else None
         }
+
+    
 
 class Category(db.Model):
     __tablename__ = 'categories'  
