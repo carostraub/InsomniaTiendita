@@ -123,7 +123,35 @@ class Order(db.Model):
     coupon_id = db.Column(db.Integer, db.ForeignKey('coupons.id'), nullable=True) 
     discount_applied = db.Column(db.Float, default=0)  
     # Relaciones
-    details = db.relationship('OrderDetail', backref='order', lazy=True)  
+    details = db.relationship('OrderDetail', backref='order', lazy=True) 
+
+    def serialize(self):
+        return{
+            "id":self.id,
+            "client_id": self.client_id,
+            "date": self.date.isoformat() if self.date else None,
+            "total": "{:,}".format(int(self.total)).replace(",", "."),
+            "status": self.status,
+            "shipping_address": self.shipping_address,
+            "coupon_id": self.coupon_id,
+            "discount_applied": self.discount_applied,
+            "details": [detail.serialize() for detail in self.details]  # Es hacerle serialize a la relación
+        }
+
+    def calculate_total(self):
+        total = 0
+        for detail in self.details: #details relacion de order
+            subtotal = detail.unit_price * detail.quantity
+            total += subtotal
+    #aplicar cupón si es que existe
+        if self.coupon and self.coupon.is_valid():
+            if self.coupon.discount_type == 'percentage':
+                total *= (1 - self.coupon.discount / 100)
+            elif self.coupon.discount_type == 'fixed':
+                total -= self.coupon.discount
+        self.total = int(round(total,0))
+        return self.total
+    
 
 
 class OrderDetail(db.Model):  

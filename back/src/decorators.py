@@ -7,10 +7,10 @@ def admin_required(f):
     @wraps(f)
     @jwt_required()
     def wrapper (*args, **kwargs):
-        current_user_id =get_jwt_identity
+        current_user_id =get_jwt_identity()
         user = Client.query.get(current_user_id)
 
-        if not user or not user.is_admin:
-            return jsonify ({"error":"Acceso denegado, tienes que ser administrador"}), 400
+        if not user or not user.admin:
+            return jsonify ({"error":"Acceso denegado, tienes que ser administrador"}), 403
         return f(*args, **kwargs)
     return wrapper
