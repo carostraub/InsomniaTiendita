@@ -1,6 +1,5 @@
-
-# Created by https://www.toptal.com/developers/gitignore/api/flask,python
-# Edit at https://www.toptal.com/developers/gitignore?templates=flask,python
+# Created by https://www.toptal.com/developers/gitignore/api/python,flask
+# Edit at https://www.toptal.com/developers/gitignore?templates=python,flask
 
 ### Flask ###
 instance/*
@@ -260,4 +259,4 @@ poetry.toml
 # LSP config files
 pyrightconfig.json
 
-# End of https://www.toptal.com/developers/gitignore/api/flask,python
+# End of https://www.toptal.com/developers/gitignore/api/python,flask

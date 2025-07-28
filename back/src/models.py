@@ -122,6 +122,7 @@ class Order(db.Model):
     shipping_address = db.Column(db.Text, nullable=False)  
     coupon_id = db.Column(db.Integer, db.ForeignKey('coupons.id'), nullable=True) 
     discount_applied = db.Column(db.Float, default=0)  
+    payment_method= db.Column(db.String, default='transferencia')
     # Relaciones
     details = db.relationship('OrderDetail', backref='order', lazy=True) 
 
@@ -135,6 +136,7 @@ class Order(db.Model):
             "shipping_address": self.shipping_address,
             "coupon_id": self.coupon_id,
             "discount_applied": self.discount_applied,
+            "payment_method":self.payment_method,
             "details": [detail.serialize() for detail in self.details]  # Es hacerle serialize a la relación
         }
 

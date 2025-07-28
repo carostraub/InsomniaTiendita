@@ -281,3 +281,67 @@ def delete_category(id):
     except Exception as e:
         db.session.rollback()
         return jsonify({"error": "No se pudo eliminar: " + str(e)}), 500
+
+
+
+        #####ORDERS
+@api.route('/orders', methods=['POST'])
+def create_order():
+    data = request.get_json()
+
+    if not data or 'items' not in data or data['items']:
+        return jsonify({"error":"No hay productos en la compra"}), 400
+    new_order = Order(
+        client_id=data.get('client.id'),
+        total= data.get('total'),
+        shipping_address =data['shipping_address'],
+        coupon_id =data.get('coupon_id'),
+        discount_applied= data.get('discount_applied'),
+        status ='pending',
+        payment_method ='transferencia'
+    )
+    db.session.add(new_order)
+    db.session.commit
+    
+    for item in data['items']:
+        product= Product.query.get(item['product_id'])
+        if not product or product.stock < item('quantity'):
+            db.session.rollback()
+            return jsonify({"error":f"Producto {item['product_id']} no disponible"}), 400
+        OrderDetail.create(
+            order_id=new_order.id,
+            product_id= product.id,
+            quantity=item['quantity'],
+            unit_price= product.current_price,
+        )
+    new_order.calculate_total()
+    db.session.commit()
+
+    return jsonify({
+        "message": "¡Pedido creado! Confirma el pago por transferencia y envía el comprobante.",
+        "order": new_order.serialize(),
+        
+    }), 201   
+
+@api.route('/orders/<int:id>/status', methods=['PUT'])
+@admin_required
+def update_order_status(id):
+    order = Order.query.get(id)
+    if not order:
+        return jsonify({"error": "Orden no encontrada"}), 404
+
+    new_status = request.json.get('status')
+    if new_status not in ['pending', 'paid', 'shipped', 'cancelled']:
+        return jsonify({"error": "Estado inválido"}), 400
+
+    order.status = new_status
+    db.session.commit()
+
+    return jsonify({"message": f"Estado actualizado a '{new_status}'"}), 200
+
+@api.route('/admin/orders', methods=['GET'])
+@admin_required
+def get_all_orders():
+    orders = Order.query.all()
+    return jsonify([order.serialize() for order in orders]), 200
+
